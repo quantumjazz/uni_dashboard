@@ -1,0 +1,120 @@
+indicators:
+  - id: population_18_24
+    title: Population aged 18-24
+    strategic_question: How is the student market changing?
+    panel: Demographics and student market
+    source: eurostat
+    dataset: demo_pjan
+    description: Resident population in the core undergraduate-age cohort.
+    unit: persons
+    frequency: annual
+    default_countries: [BG, EU27_2020, RO, PL]
+    aggregate_dimension: age
+    dimensions:
+      sex: T
+      age: [Y18, Y19, Y20, Y21, Y22, Y23, Y24]
+      unit: NR
+  - id: population_25_34
+    title: Population aged 25-34
+    strategic_question: How is the student market changing?
+    panel: Demographics and student market
+    source: eurostat
+    dataset: demo_pjan
+    description: Resident population in the graduate and early-career cohort.
+    unit: persons
+    frequency: annual
+    default_countries: [BG, EU27_2020, DE, FR]
+    aggregate_dimension: age
+    dimensions:
+      sex: T
+      age: [Y25, Y26, Y27, Y28, Y29, Y30, Y31, Y32, Y33, Y34]
+      unit: NR
+  - id: tertiary_attainment_25_34
+    title: Tertiary attainment age 25-34
+    strategic_question: How does Bulgaria compare with the EU and OECD countries?
+    panel: Higher education benchmarking
+    source: eurostat
+    dataset: edat_lfse_03
+    description: Share of 25-34 population with tertiary education attainment.
+    unit: percent
+    frequency: annual
+    default_countries: [BG, EU27_2020, DE, FR, RO]
+    dimensions:
+      sex: T
+      age: Y25-34
+      isced11: ED5-8
+      unit: PC
+  - id: employment_tertiary_25_64
+    title: Employment rate of tertiary-educated adults
+    strategic_question: What labor-market outcomes are associated with tertiary education?
+    panel: Labor-market outcomes
+    source: eurostat
+    dataset: lfsa_ergaed
+    description: Employment rate of adults aged 25-64 with tertiary education.
+    unit: percent
+    frequency: annual
+    default_countries: [BG, EU27_2020, DE, CZ]
+    dimensions:
+      sex: T
+      age: Y25-64
+      isced11: ED5-8
+      unit: PC
+  - id: unemployment_tertiary_25_64
+    title: Unemployment rate of tertiary-educated adults
+    strategic_question: What labor-market outcomes are associated with tertiary education?
+    panel: Labor-market outcomes
+    source: eurostat
+    dataset: lfsa_urgaed
+    description: Unemployment rate of adults aged 25-64 with tertiary education.
+    unit: percent
+    frequency: annual
+    default_countries: [BG, EU27_2020, DE, CZ]
+    dimensions:
+      sex: T
+      age: Y25-64
+      isced11: ED5-8
+      unit: PC
+  - id: rd_expenditure_gdp
+    title: R&D expenditure
+    strategic_question: What is happening in the research and innovation environment?
+    panel: Research and innovation environment
+    source: eurostat
+    dataset: rd_e_gerdtot
+    description: Gross domestic expenditure on R&D as a share of GDP.
+    unit: percent
+    frequency: annual
+    default_countries: [BG, EU27_2020, DE, FR]
+    dimensions:
+      sectperf: TOTAL
+      unit: PC_GDP
+  - id: researchers_fte
+    title: Researchers (FTE)
+    strategic_question: What is happening in the research and innovation environment?
+    panel: Research and innovation environment
+    source: eurostat
+    dataset: rd_p_persocc
+    description: Researchers measured in full-time equivalent personnel.
+    unit: persons
+    frequency: annual
+    default_countries: [BG, EU27_2020, DE]
+    dimensions:
+      unit: FTE
+      prof_pos: TOTAL
+      sectperf: TOTAL
+      sex: T
+  - id: international_students_share
+    title: International tertiary students
+    strategic_question: What international mobility patterns matter for higher education?
+    panel: International context
+    source: eurostat
+    dataset: educ_uoe_mobs02
+    description: International inbound tertiary student mobility proxy.
+    unit: persons
+    frequency: annual
+    default_countries: [BG, DE, FR]
+    aggregate_dimension: partner
+    dimensions:
+      isced11: ED5-8
+      unit: NR
+      partner: [EUR]
+      sex: T
