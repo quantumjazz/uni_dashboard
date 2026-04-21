@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>University Leadership Dashboard</title>
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/styles.css?v=20260420-6" />
     <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
   </head>
   <body>
@@ -12,13 +12,15 @@
       <header class="hero">
         <div>
           <p class="eyebrow">Strategic intelligence for university leadership</p>
-          <h1>University Leadership Dashboard</h1>
-          <p class="hero-copy">
-            A Bulgaria-first view on demand, outcomes, and research conditions using official statistical APIs.
-          </p>
+          <div class="page-title-row">
+            <h1 id="page-title">University Leadership Dashboard</h1>
+            <span class="status-badge" id="page-context">Loading</span>
+          </div>
+          <p class="hero-copy" id="page-description">Loading page definition...</p>
+          <nav class="top-nav" id="top-nav" aria-label="Dashboard pages"></nav>
         </div>
         <div class="control-card">
-          <div class="field-label">
+          <div class="field-label" id="countries-control">
             Focus countries
             <div class="dropdown" id="country-dropdown">
               <button type="button" class="dropdown-toggle" id="country-toggle">
@@ -27,7 +29,7 @@
               <div class="dropdown-menu" id="country-menu"></div>
             </div>
           </div>
-          <label class="field-label">
+          <label class="field-label" id="year-range-control">
             Time range
             <select id="year-range">
               <option value="2015:2024">2015 &ndash; 2024</option>
@@ -35,72 +37,25 @@
               <option value="2005:2024">2005 &ndash; 2024</option>
             </select>
           </label>
+          <label class="field-label" id="institution-control" hidden>
+            Universities
+            <div class="dropdown" id="institution-dropdown">
+              <button type="button" class="dropdown-toggle" id="institution-toggle">
+                <span id="institution-selection-label">Select universities</span>
+                <span class="dropdown-count" id="institution-count">0</span>
+              </button>
+              <div class="dropdown-menu" id="institution-menu"></div>
+            </div>
+            <span class="field-help" id="institution-help">Choose one or more universities. KPI cards stay on the first selected university.</span>
+          </label>
           <button id="export-button" type="button">Export CSV</button>
         </div>
       </header>
 
       <section class="kpi-grid" id="kpi-grid" aria-live="polite"></section>
 
-      <main class="dashboard-grid">
-        <section class="panel panel-wide" id="panel-market">
-          <div class="panel-header">
-            <div>
-              <p class="panel-kicker">Student market</p>
-              <h2>Demographics and tertiary attainment</h2>
-            </div>
-            <div class="indicator-tag" id="tag-market">population_18_24</div>
-          </div>
-          <div id="market-chart" class="chart"></div>
-          <p class="chart-note" id="market-note"></p>
-        </section>
-
-        <section class="panel" id="panel-labor">
-          <div class="panel-header">
-            <div>
-              <p class="panel-kicker">Outcomes</p>
-              <h2>Employment premium of tertiary education</h2>
-            </div>
-            <div class="indicator-tag">employment_tertiary_25_64</div>
-          </div>
-          <div id="labor-chart" class="chart"></div>
-          <p class="chart-note" id="labor-note"></p>
-        </section>
-
-        <section class="panel" id="panel-research">
-          <div class="panel-header">
-            <div>
-              <p class="panel-kicker">Innovation environment</p>
-              <h2>R&D expenditure benchmark</h2>
-            </div>
-            <div class="indicator-tag">rd_expenditure_gdp</div>
-          </div>
-          <div id="research-chart" class="chart"></div>
-          <p class="chart-note" id="research-note"></p>
-        </section>
-
-        <section class="panel panel-wide">
-          <div class="panel-header">
-            <div>
-              <p class="panel-kicker">Reference</p>
-              <h2>Indicator catalogue</h2>
-            </div>
-          </div>
-          <div class="table-wrap">
-            <table id="indicator-table">
-              <thead>
-                <tr>
-                  <th>Indicator</th>
-                  <th>Panel</th>
-                  <th>Source</th>
-                  <th>Description</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-        </section>
-      </main>
+      <main class="dashboard-grid" id="page-content"></main>
     </div>
-    <script type="module" src="/app.js"></script>
+    <script type="module" src="/app.js?v=20260420-6"></script>
   </body>
 </html>

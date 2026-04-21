@@ -65,10 +65,22 @@ class CacheRepository:
             params.append(year_to)
 
         query = f"""
-            SELECT source, dataset, indicator, country, year, value, unit, note, fetched_at
+            SELECT
+                source,
+                dataset,
+                indicator,
+                country,
+                year,
+                series_key,
+                series_label,
+                value,
+                unit,
+                note,
+                dimensions_json,
+                fetched_at
             FROM data_points
             WHERE {' AND '.join(clauses)}
-            ORDER BY year, country
+            ORDER BY year, country, series_key
         """
         with get_connection() as conn:
             rows = conn.execute(query, params).fetchall()
@@ -87,9 +99,12 @@ class CacheRepository:
                 indicator=row["indicator"],
                 country=row["country"],
                 year=row["year"],
+                series_key=row["series_key"] or None,
+                series_label=row["series_label"],
                 value=row["value"],
                 unit=row["unit"],
                 note=row["note"],
+                dimensions=json.loads(row["dimensions_json"] or "{}"),
             )
             for row in rows
         ]
@@ -101,8 +116,19 @@ class CacheRepository:
             conn.executemany(
                 """
                 INSERT INTO data_points (
-                    source, dataset, indicator, country, year, value, unit, note, fetched_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    source,
+                    dataset,
+                    indicator,
+                    country,
+                    year,
+                    series_key,
+                    series_label,
+                    value,
+                    unit,
+                    note,
+                    dimensions_json,
+                    fetched_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
@@ -111,9 +137,12 @@ class CacheRepository:
                         row.indicator,
                         row.country,
                         row.year,
+                        row.series_key or "",
+                        row.series_label,
                         row.value,
                         row.unit,
                         row.note,
+                        json.dumps(row.dimensions),
                         now,
                     )
                     for row in rows

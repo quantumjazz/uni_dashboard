@@ -58,15 +58,15 @@ You have two options:
 **Option A — If you push it to GitHub first (recommended):**
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/university-dashboard.git
-cd university-dashboard
+git clone git@github.com:quantumjazz/uni_dashboard.git university_dashboard
+cd university_dashboard
 ```
 
 **Option B — Copy from your Mac via USB or scp:**
 
 From your Mac terminal:
 ```bash
-scp -r /Users/victor/Documents/Projects/university_dashboard ubuntu-user@LAPTOP_IP:~/apps/
+scp -r /Users/victor/Documents/Projects/uni_dashboard ubuntu-user@LAPTOP_IP:~/apps/university_dashboard
 ```
 
 Then on the Ubuntu laptop:
@@ -81,6 +81,19 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+### 2.3b Download the DEQAR snapshot used by the quality page
+
+```bash
+mkdir -p data/deqar
+curl -L https://backend.deqar.eu/static/daily-csv/deqar-institutions.csv -o data/deqar/deqar-institutions.csv
+curl -L https://backend.deqar.eu/static/daily-csv/deqar-reports.csv -o data/deqar/deqar-reports.csv
+curl -L https://backend.deqar.eu/static/daily-csv/deqar-agencies.csv -o data/deqar/deqar-agencies.csv
+```
+
+If you later want to store these files somewhere else, set
+`DEQAR_INSTITUTIONS_CSV_PATH`, `DEQAR_REPORTS_CSV_PATH`, and
+`DEQAR_AGENCIES_CSV_PATH` in the systemd service.
 
 ### 2.4 Test that it runs
 
@@ -401,6 +414,76 @@ sudo systemctl restart cloudflared
 - **Set a static local IP** (optional): makes it easier to SSH into from your
   other machines. Go to Settings → Network → Wired/WiFi → gear icon → IPv4 →
   set Manual and pick an IP like `192.168.1.100`
+
+---
+
+## Updating an existing Ubuntu deployment
+
+If the laptop already has an older version running, update it in place instead
+of creating a second deployment.
+
+### 1. SSH into the laptop and go to the existing app directory
+
+```bash
+cd ~/apps/university_dashboard
+```
+
+If the repo remote is still pointing somewhere else, reset it once:
+
+```bash
+git remote set-url origin git@github.com:quantumjazz/uni_dashboard.git
+```
+
+### 2. Check for local changes before pulling
+
+```bash
+git status --short
+```
+
+If you see local edits you want to keep, commit or stash them before updating.
+
+### 3. Pull the latest code
+
+```bash
+git fetch origin
+git pull --ff-only origin main
+```
+
+### 4. Refresh the Python environment
+
+```bash
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 5. Refresh the DEQAR snapshot
+
+```bash
+mkdir -p data/deqar
+curl -L https://backend.deqar.eu/static/daily-csv/deqar-institutions.csv -o data/deqar/deqar-institutions.csv
+curl -L https://backend.deqar.eu/static/daily-csv/deqar-reports.csv -o data/deqar/deqar-reports.csv
+curl -L https://backend.deqar.eu/static/daily-csv/deqar-agencies.csv -o data/deqar/deqar-agencies.csv
+```
+
+### 6. Restart the app service
+
+```bash
+sudo systemctl restart uni-dashboard
+sudo systemctl status uni-dashboard
+```
+
+### 7. If you changed reverse proxy or tunnel config, restart those too
+
+```bash
+sudo systemctl restart caddy
+sudo systemctl restart cloudflared
+```
+
+### 8. Follow logs if the updated app does not come up
+
+```bash
+sudo journalctl -u uni-dashboard -n 100 --no-pager
+```
 
 ---
 

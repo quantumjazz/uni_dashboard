@@ -44,6 +44,71 @@ indicators:
       age: Y25-34
       isced11: ED5-8
       unit: PC
+  - id: tertiary_enrolment_total
+    title: Tertiary enrolment
+    strategic_question: How large is the current tertiary education market?
+    panel: Higher education benchmarking
+    source: eurostat
+    dataset: educ_uoe_enrt01
+    description: Total tertiary enrolment across ISCED 5-8.
+    unit: persons
+    frequency: annual
+    default_countries: [BG, EU27_2020, DE, RO]
+    dimensions:
+      worktime: TOTAL
+      sector: TOT_SEC
+      sex: T
+      isced11: ED5-8
+      unit: NR
+  - id: recent_graduate_employment_rate
+    title: Recent graduate employment rate
+    strategic_question: Are recent graduates finding jobs quickly after tertiary education?
+    panel: Labor-market outcomes
+    source: eurostat
+    dataset: edat_lfse_24
+    description: Employment rate for tertiary-educated recent graduates aged 20-34, 1 to 3 years after graduation.
+    unit: percent
+    frequency: annual
+    default_countries: [BG, EU27_2020, DE, RO]
+    dimensions:
+      duration: Y1-3
+      isced11: ED5-8
+      age: Y20-34
+      sex: T
+      unit: PC
+  - id: new_entrants_by_field
+    title: New entrants by field
+    strategic_question: Which fields are gaining or losing demand at entry?
+    panel: Demographics and student market
+    source: eurostat
+    dataset: educ_uoe_ent02
+    description: New entrants to tertiary education by broad field of study.
+    unit: persons
+    frequency: annual
+    default_countries: [BG, EU27_2020, DE, RO]
+    aggregate_dimension: isced11
+    breakdown_dimension: iscedf13
+    dimensions:
+      unit: NR
+      isced11: [ED54, ED55, ED6, ED7, ED8]
+      sex: T
+      iscedf13: [F00, F01, F02, F03, F04, F05, F06, F07, F08, F09, F10]
+  - id: graduates_by_field
+    title: Graduates by field
+    strategic_question: Which fields are producing more tertiary graduates?
+    panel: Demographics and student market
+    source: eurostat
+    dataset: educ_uoe_grad02
+    description: Tertiary graduates by broad field of study.
+    unit: persons
+    frequency: annual
+    default_countries: [BG, EU27_2020, DE, RO]
+    breakdown_dimension: iscedf13
+    dimensions:
+      unit: NR
+      isced11: ED5-8
+      sex: T
+      iscedf13: [F00, F01, F02, F03, F04, F05, F06, F07, F08, F09, F10]
   - id: employment_tertiary_25_64
     title: Employment rate of tertiary-educated adults
     strategic_question: What labor-market outcomes are associated with tertiary education?
@@ -108,7 +173,7 @@ indicators:
     panel: International context
     source: eurostat
     dataset: educ_uoe_mobs02
-    description: International inbound tertiary student mobility proxy.
+    description: International inbound tertiary student count.
     unit: persons
     frequency: annual
     default_countries: [BG, DE, FR]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -7,7 +8,7 @@ import httpx
 
 from backend.app.cache.repository import CacheRepository
 from backend.app.clients.eurostat import EurostatClient
-from backend.app.models.schemas import DataPoint, DataResponse, IndicatorDefinition
+from backend.app.models.schemas import BatchDataError, BatchDataResponse, DataPoint, DataResponse, IndicatorDefinition
 from backend.app.services.indicator_registry import IndicatorRegistry
 
 logger = logging.getLogger(__name__)
@@ -51,7 +52,43 @@ class DataService:
                     raise
 
         summary = self._build_summary(indicator, rows, target_countries)
+        metadata.update(self._build_metadata(rows))
         return DataResponse(indicator=indicator, rows=rows, summary=summary, metadata=metadata)
+
+    async def get_many_indicator_data(
+        self,
+        indicator_ids: list[str],
+        countries: list[str],
+        year_from: int | None = None,
+        year_to: int | None = None,
+    ) -> BatchDataResponse:
+        unique_indicator_ids = list(dict.fromkeys(indicator_ids))
+        tasks = [
+            self.get_indicator_data(indicator_id, countries, year_from, year_to)
+            for indicator_id in unique_indicator_ids
+        ]
+        settled = await asyncio.gather(*tasks, return_exceptions=True)
+
+        results: dict[str, DataResponse] = {}
+        errors: dict[str, BatchDataError] = {}
+        for indicator_id, result in zip(unique_indicator_ids, settled, strict=False):
+            if isinstance(result, Exception):
+                if isinstance(result, KeyError):
+                    errors[indicator_id] = BatchDataError(message=f"Unknown indicator: {indicator_id}")
+                else:
+                    errors[indicator_id] = BatchDataError(message=str(result))
+                continue
+            results[indicator_id] = result
+
+        return BatchDataResponse(
+            results=results,
+            errors=errors,
+            metadata={
+                "requested": len(unique_indicator_ids),
+                "returned": len(results),
+                "failed": len(errors),
+            },
+        )
 
     async def _refresh_indicator(self, indicator: IndicatorDefinition, countries: list[str]) -> list[DataPoint]:
         if indicator.source != "eurostat":
@@ -71,9 +108,26 @@ class DataService:
         return filtered
 
     @staticmethod
+    def _build_metadata(rows: list[DataPoint]) -> dict[str, Any]:
+        if not rows:
+            return {"latest_year": None, "series_count": 0}
+        series_keys = {row.series_key or "__base__" for row in rows}
+        return {"latest_year": max(row.year for row in rows), "series_count": len(series_keys)}
+
+    @staticmethod
     def _build_summary(indicator: IndicatorDefinition, rows: list[DataPoint], countries: list[str]) -> str | None:
         if not rows:
             return f"No data returned for {indicator.title}."
+
+        if indicator.breakdown_dimension:
+            focus_country = countries[0] if countries else "BG"
+            focus_rows = [row for row in rows if row.country == focus_country]
+            target_rows = focus_rows or rows
+            focus_country = focus_country if focus_rows else target_rows[0].country
+            latest_year = max(row.year for row in target_rows)
+            latest_rows = [row for row in target_rows if row.year == latest_year]
+            series_count = len({row.series_key or "__base__" for row in latest_rows})
+            return f"{series_count} {indicator.breakdown_dimension} series available for {focus_country} in {latest_year}."
 
         latest_by_country: dict[str, DataPoint] = {}
         for row in rows:
@@ -84,6 +138,8 @@ class DataService:
         focus_country = countries[0] if countries else "BG"
         focus = latest_by_country.get(focus_country)
         eu = latest_by_country.get("EU27_2020")
+        if focus and indicator.unit == "persons" and len(latest_by_country) > 1:
+            return f"Latest value for {focus.country} is {focus.value:.1f} in {focus.year}. Use absolute counts as system-size context."
         if focus and eu and focus.country != eu.country:
             delta = focus.value - eu.value
             direction = "above" if delta >= 0 else "below"

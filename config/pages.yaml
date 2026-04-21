@@ -1,0 +1,147 @@
+pages:
+  - id: overview
+    slug: overview
+    title: Overview
+    description: Executive synthesis across demand, outcomes, research visibility, and quality context.
+    status: planned
+    context_type: mixed_context
+    controls: [countries, year_range, institution, export]
+    panels: []
+  - id: market
+    slug: market
+    title: Market and Demand
+    description: National-context view of demographic pressure, attainment, and international student demand signals.
+    status: active
+    context_type: country_context
+    controls: [countries, year_range, export]
+    panels:
+      - id: population_18_24_trend
+        title: Population aged 18-24 trend
+        description: Undergraduate-age population trend for Bulgaria and selected comparison countries.
+        indicator_ids: [population_18_24]
+        chart_type: line
+        layout: wide
+      - id: population_25_34_trend
+        title: Population aged 25-34 trend
+        description: Graduate and early-career cohort trend for Bulgaria and selected comparison countries.
+        indicator_ids: [population_25_34]
+        chart_type: line
+      - id: tertiary_enrolment_benchmark
+        title: Tertiary enrolment rate
+        description: Tertiary enrolment normalized by the population aged 18-34.
+        indicator_ids: [tertiary_enrolment_total, population_18_24, population_25_34]
+        chart_type: derived_rate_bar
+      - id: tertiary_attainment_snapshot
+        title: Tertiary attainment snapshot
+        description: Latest benchmark view of tertiary attainment age 25-34.
+        indicator_ids: [tertiary_attainment_25_34]
+        chart_type: bar
+      - id: new_entrants_by_field
+        title: New entrants by field
+        description: Latest broad-field mix for tertiary entrants in the current focus country.
+        indicator_ids: [new_entrants_by_field]
+        chart_type: breakdown_bar
+        layout: wide
+      - id: graduates_by_field
+        title: Graduates by field
+        description: Latest broad-field mix for tertiary graduates in the current focus country.
+        indicator_ids: [graduates_by_field]
+        chart_type: breakdown_bar
+        layout: wide
+      - id: international_students_trend
+        title: International tertiary students trend
+        description: Country-level international student counts as external demand context.
+        indicator_ids: [international_students_share]
+        chart_type: line
+        layout: wide
+  - id: outcomes
+    slug: outcomes
+    title: Outcomes and Mobility
+    description: Labour-market and internationalisation outcomes for tertiary education.
+    status: active
+    context_type: country_context
+    controls: [countries, year_range, export]
+    panels:
+      - id: tertiary_attainment_trend
+        title: Tertiary attainment age 25-34
+        description: Trend in tertiary attainment among young adults.
+        indicator_ids: [tertiary_attainment_25_34]
+        chart_type: line
+        layout: wide
+      - id: recent_graduate_employment
+        title: Recent graduate employment rate
+        description: Employment rate for tertiary-educated recent graduates aged 20-34, 1 to 3 years after graduation.
+        indicator_ids: [recent_graduate_employment_rate]
+        chart_type: line
+      - id: tertiary_employment_benchmark
+        title: Employment rate of tertiary-educated adults
+        description: Latest benchmark for tertiary-educated adults aged 25-64.
+        indicator_ids: [employment_tertiary_25_64]
+        chart_type: bar
+      - id: tertiary_unemployment_benchmark
+        title: Unemployment rate of tertiary-educated adults
+        description: Latest benchmark for unemployment among tertiary-educated adults aged 25-64.
+        indicator_ids: [unemployment_tertiary_25_64]
+        chart_type: bar
+      - id: international_students_outcomes
+        title: International tertiary students trend
+        description: Country-level international student counts as an internationalisation context signal.
+        indicator_ids: [international_students_share]
+        chart_type: line
+        layout: wide
+  - id: research
+    slug: research
+    title: Research and Innovation
+    description: Institution research footprint and the wider national innovation environment.
+    status: active
+    context_type: mixed_context
+    controls: [countries, year_range, institution, export]
+    panels:
+      - id: institution_publications_trend
+        title: Publications by publication year
+        description: OpenAlex yearly output for the selected institution.
+        chart_type: research_works_line
+        layout: wide
+      - id: institution_citations_trend
+        title: Citations by publication year
+        description: Citations attached to works grouped by publication year in OpenAlex.
+        chart_type: research_citations_line
+        layout: wide
+      - id: rd_expenditure_context
+        title: R&D expenditure as percent of GDP
+        description: National R&D intensity for Bulgaria and comparison systems.
+        indicator_ids: [rd_expenditure_gdp]
+        chart_type: line
+      - id: researchers_context
+        title: Researchers (FTE)
+        description: National research labor capacity in full-time equivalents.
+        indicator_ids: [researchers_fte]
+        chart_type: line
+      - id: eu_projects_status
+        title: EU project participation
+        description: CORDIS-backed institutional project visibility.
+        chart_type: blocked_notice
+        layout: wide
+  - id: quality
+    slug: quality
+    title: Quality and Benchmarking
+    description: External QA status and future peer benchmarking context.
+    status: active
+    context_type: institution_context
+    controls: [institution, export]
+    panels:
+      - id: institutional_qa_status
+        title: Institutional QA status
+        description: DEQAR-backed institutional review status and current external-quality context.
+        chart_type: quality_status
+        layout: wide
+      - id: deqar_reports
+        title: DEQAR reports and decisions
+        description: External reports, decision dates, agencies, and links when DEQAR access is available.
+        chart_type: quality_reports
+        layout: wide
+      - id: peer_benchmarking_readiness
+        title: Peer benchmarking readiness
+        description: Readiness for future peer-university comparison once external institution datasets are enabled.
+        chart_type: quality_benchmarking
+        layout: wide

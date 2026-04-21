@@ -47,10 +47,13 @@ class EurostatClient:
         values = payload.get("value", {})
         dimensions = payload.get("dimension", {})
 
-        categories = [dimensions[dimension_id]["category"]["index"] for dimension_id in ids]
-        reverse_maps = []
-        for category_index in categories:
+        reverse_maps: list[dict[int, str]] = []
+        label_maps: dict[str, dict[str, str]] = {}
+        for dimension_id in ids:
+            category = dimensions[dimension_id]["category"]
+            category_index = category.get("index", {})
             reverse_maps.append({position: label for label, position in category_index.items()})
+            label_maps[dimension_id] = category.get("label", {})
 
         rows: list[DataPoint] = []
         for index_tuple in product(*[range(size) for size in sizes]):
@@ -65,6 +68,18 @@ class EurostatClient:
             if country is None or time_value is None:
                 continue
 
+            extra_dimensions = {
+                key: value
+                for key, value in dims.items()
+                if key not in {"time", "TIME_PERIOD", "geo", "unit"}
+            }
+            series_key = None
+            series_label = None
+            if indicator.breakdown_dimension:
+                series_key = extra_dimensions.get(indicator.breakdown_dimension)
+                if series_key is not None:
+                    series_label = label_maps.get(indicator.breakdown_dimension, {}).get(series_key, series_key)
+
             rows.append(
                 DataPoint(
                     source=indicator.source,
@@ -73,22 +88,27 @@ class EurostatClient:
                     country=country,
                     year=int(str(time_value)[:4]),
                     value=float(value),
+                    series_key=series_key,
+                    series_label=series_label,
                     unit=dims.get("unit", indicator.unit),
                     note=indicator.notes,
+                    dimensions=extra_dimensions,
                 )
             )
         return rows
 
     @staticmethod
     def _aggregate_rows(rows: list[DataPoint], dimension: str) -> list[DataPoint]:
-        """Sum values across a dimension (e.g. individual ages) per country+year."""
-        sums: dict[tuple[str, int], float] = defaultdict(float)
-        template: dict[tuple[str, int], DataPoint] = {}
+        """Sum values across a dimension (e.g. individual ages) per country+year+series."""
+        sums: dict[tuple[str, int, str], float] = defaultdict(float)
+        template: dict[tuple[str, int, str], DataPoint] = {}
         for row in rows:
-            key = (row.country, row.year)
+            key = (row.country, row.year, row.series_key or "")
             sums[key] += row.value
             if key not in template:
-                template[key] = row
+                template[key] = row.model_copy(
+                    update={"dimensions": {k: v for k, v in row.dimensions.items() if k != dimension}}
+                )
         return [
             template[key].model_copy(update={"value": sums[key]})
             for key in sorted(sums)

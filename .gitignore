@@ -1,0 +1,10 @@
+.env
+.DS_Store
+.Rhistory
+.venv/
+.claude/
+*.py[cod]
+__pycache__/
+data/cache/*.db
+data/deqar/*.csv
+data/eheso/*.csv
