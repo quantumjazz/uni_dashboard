@@ -49,6 +49,7 @@ const state = {
   institutionResults: [],
   institutionSearchMode: "browse",
   researchSummaryCache: new Map(),
+  projectsStatusCache: new Map(),
   qualityStatusCache: new Map(),
   qualityReportSelection: new Map(),
   qualityReportAnalysisCache: new Map(),
@@ -115,7 +116,15 @@ function qualityPeerModeMeta(value) {
 }
 
 function isHtmlPanelType(chartType) {
-  return ["blocked_notice", "quality_status", "quality_reports", "quality_benchmarking"].includes(chartType);
+  return [
+    "blocked_notice",
+    "quality_status",
+    "quality_reports",
+    "quality_benchmarking",
+    "overview_national_snapshot",
+    "overview_trend_watch",
+    "overview_institution_brief",
+  ].includes(chartType);
 }
 
 function escapeHtml(value) {
@@ -1500,6 +1509,18 @@ function updateInstitutionHelp(message) {
     institutionHelp.textContent = message;
     return;
   }
+  if (state.activePage?.id === "overview") {
+    if (!primary) {
+      institutionHelp.textContent = "Choose one or more universities. The Overview page anchors institution-level signals to the first selected university while country metrics stay on Bulgaria and the selected systems.";
+      return;
+    }
+    if (state.currentInstitutions.length === 1) {
+      institutionHelp.textContent = `Overview is anchored to ${primary.display_name} for research, EU-project, and quality context. Add more universities if you want to switch the primary institution quickly from the same selector.`;
+      return;
+    }
+    institutionHelp.textContent = `${state.currentInstitutions.length} universities selected. Overview stays anchored to ${primary.display_name}; use Research for side-by-side publication comparisons.`;
+    return;
+  }
   if (state.activePage?.id === "quality") {
     if (!primary) {
       institutionHelp.textContent = "Choose a university for external QA and benchmarking context. Start typing to search all OpenAlex institutions; the blank menu shows global quick picks.";
@@ -2262,6 +2283,389 @@ async function getQualityStatusCached(institutionId, peerMode = state.qualityPee
   return quality;
 }
 
+async function getProjectsStatusCached(institutionId) {
+  if (state.projectsStatusCache.has(institutionId)) {
+    return state.projectsStatusCache.get(institutionId);
+  }
+  const status = await fetchProjectsStatus(institutionId);
+  state.projectsStatusCache.set(institutionId, status);
+  return status;
+}
+
+function overviewResponseRows(responseMap, indicatorId) {
+  return responseMap?.[indicatorId]?.rows || [];
+}
+
+function overviewLatestIndicatorYear(responseMap, indicatorIds) {
+  const years = indicatorIds
+    .map((indicatorId) => responseMap?.[indicatorId]?.metadata?.latest_year ?? latestYear(overviewResponseRows(responseMap, indicatorId)))
+    .filter(Number.isFinite);
+  return years.length ? Math.max(...years) : null;
+}
+
+function overviewComparisonRangeCopy(rows, unit) {
+  const latest = latestByCountry(rows);
+  const comparisonRows = state.currentCountries
+    .filter((code) => code !== "BG" && code !== "EU27_2020")
+    .map((code) => latest[code])
+    .filter(Boolean);
+
+  if (!comparisonRows.length) return "No country comparisons selected beyond the EU aggregate";
+  if (comparisonRows.length === 1) {
+    const row = comparisonRows[0];
+    return `${countryLabel(row.country)} at ${formatValue(row.value, unit)} in ${row.year}`;
+  }
+
+  const values = comparisonRows.map((row) => row.value);
+  return `Selected-system range ${formatValue(Math.min(...values), unit)} to ${formatValue(Math.max(...values), unit)}`;
+}
+
+function overviewEuComparisonCopy(rows, unit, label = "EU benchmark") {
+  const latest = latestByCountry(rows);
+  const bg = latest.BG;
+  const benchmark = latest.EU27_2020;
+  if (!bg || !benchmark) return `${label} unavailable`;
+  const diff = bg.value - benchmark.value;
+  const direction = diff >= 0 ? "above" : "below";
+  return `${Math.abs(diff).toFixed(1)} ${unit === "percent" ? "pp" : unit} ${direction} ${label.toLowerCase()}`;
+}
+
+function overviewDeltaSincePrevious(rows, unit, country = "BG") {
+  const { latest, previous } = latestAndPrevious(rows, country);
+  if (!latest || !previous) return "No earlier comparison";
+  return `${formatDelta(latest.value - previous.value, unit)} vs prior year`;
+}
+
+function overviewMetricCard({ kicker, title, value, subtitle, detail, tone = "neutral" }) {
+  return `
+    <article class="overview-metric-card ${tone}">
+      <p class="overview-metric-kicker">${escapeHtml(kicker)}</p>
+      <h3>${escapeHtml(title)}</h3>
+      <strong>${escapeHtml(value)}</strong>
+      <span>${escapeHtml(subtitle)}</span>
+      <p>${escapeHtml(detail)}</p>
+    </article>
+  `;
+}
+
+function overviewMiniChartState(containerId, title, message) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = `
+    <div class="overview-mini-state">
+      <strong>${escapeHtml(title)}</strong>
+      <p>${escapeHtml(message)}</p>
+    </div>
+  `;
+}
+
+function qualityCurrentStatusValue(quality) {
+  const decision = quality?.deqar?.current_status || quality?.neaa?.metadata?.current_status || "";
+  if (!decision) return pageStatusLabel(qualityOverallSourceStatus(quality));
+  const tone = qualityDecisionTone(decision);
+  if (tone === "positive") return "Positive";
+  if (tone === "conditional") return "Conditional";
+  if (tone === "negative") return "Negative";
+  return truncateText(decision, 36);
+}
+
+function renderOverviewNationalSnapshotPanel(chartId, responseMap) {
+  const el = document.getElementById(chartId);
+  if (!el) return;
+  setChartContentMode(el);
+
+  const popRows = overviewResponseRows(responseMap, "population_18_24");
+  const attainmentRows = overviewResponseRows(responseMap, "tertiary_attainment_25_34");
+  const graduateRows = overviewResponseRows(responseMap, "recent_graduate_employment_rate");
+  const internationalRows = overviewResponseRows(responseMap, "international_students_share");
+  const researcherRows = overviewResponseRows(responseMap, "researchers_fte");
+  const rdRows = overviewResponseRows(responseMap, "rd_expenditure_gdp");
+
+  const pop = latestAndPrevious(popRows);
+  const attainment = latestByCountry(attainmentRows);
+  const graduate = latestByCountry(graduateRows);
+  const international = latestAndPrevious(internationalRows);
+  const researchers = latestAndPrevious(researcherRows);
+  const rd = latestByCountry(rdRows);
+
+  const cards = [
+    overviewMetricCard({
+      kicker: "Demand context",
+      title: "Population aged 18-24",
+      value: pop.latest ? formatValue(pop.latest.value, "persons") : "n/a",
+      subtitle: pop.latest ? `Bulgaria • ${pop.latest.year}` : "Bulgaria",
+      detail: popRows.length
+        ? `${overviewDeltaSincePrevious(popRows, "persons")} • ${overviewComparisonRangeCopy(popRows, "persons")}`
+        : "Population context unavailable in the selected range",
+    }),
+    overviewMetricCard({
+      kicker: "Outcomes benchmark",
+      title: "Tertiary attainment age 25-34",
+      value: attainment.BG ? formatValue(attainment.BG.value, "percent") : "n/a",
+      subtitle: attainment.BG ? `Bulgaria • ${attainment.BG.year}` : "Bulgaria",
+      detail: attainmentRows.length
+        ? `${overviewEuComparisonCopy(attainmentRows, "percent")} • ${overviewDeltaSincePrevious(attainmentRows, "percent")}`
+        : "Attainment benchmark unavailable in the selected range",
+      tone: attainment.BG && attainment.EU27_2020 ? deltaClassFor(attainment.BG.value - attainment.EU27_2020.value) : "neutral",
+    }),
+    overviewMetricCard({
+      kicker: "Graduate outcomes",
+      title: "Recent graduate employment",
+      value: graduate.BG ? formatValue(graduate.BG.value, "percent") : "n/a",
+      subtitle: graduate.BG ? `Bulgaria • ${graduate.BG.year}` : "Bulgaria",
+      detail: graduateRows.length
+        ? `${overviewEuComparisonCopy(graduateRows, "percent")} • ${overviewDeltaSincePrevious(graduateRows, "percent")}`
+        : "Graduate-employment benchmark unavailable in the selected range",
+      tone: graduate.BG && graduate.EU27_2020 ? deltaClassFor(graduate.BG.value - graduate.EU27_2020.value) : "neutral",
+    }),
+    overviewMetricCard({
+      kicker: "International demand",
+      title: "International tertiary students",
+      value: international.latest ? formatValue(international.latest.value, "persons") : "n/a",
+      subtitle: international.latest ? `Bulgaria • ${international.latest.year}` : "Bulgaria",
+      detail: internationalRows.length
+        ? `${overviewDeltaSincePrevious(internationalRows, "persons")} • ${overviewComparisonRangeCopy(internationalRows, "persons")}`
+        : "International-demand context unavailable in the selected range",
+    }),
+    overviewMetricCard({
+      kicker: "Research context",
+      title: "R&D expenditure",
+      value: rd.BG ? formatValue(rd.BG.value, "percent") : "n/a",
+      subtitle: rd.BG ? `Bulgaria • ${rd.BG.year}` : "Bulgaria",
+      detail: rdRows.length
+        ? `${overviewEuComparisonCopy(rdRows, "percent")} • ${overviewDeltaSincePrevious(rdRows, "percent")}`
+        : "R&D expenditure benchmark unavailable in the selected range",
+      tone: rd.BG && rd.EU27_2020 ? deltaClassFor(rd.BG.value - rd.EU27_2020.value) : "neutral",
+    }),
+    overviewMetricCard({
+      kicker: "Research context",
+      title: "Researchers (FTE)",
+      value: researchers.latest ? formatValue(researchers.latest.value, "persons") : "n/a",
+      subtitle: researchers.latest ? `Bulgaria • ${researchers.latest.year}` : "Bulgaria",
+      detail: researcherRows.length
+        ? `${overviewDeltaSincePrevious(researcherRows, "persons")} • ${overviewComparisonRangeCopy(researcherRows, "persons")}`
+        : "Research-labour context unavailable in the selected range",
+    }),
+  ];
+
+  el.innerHTML = `
+    <div class="overview-metric-grid">
+      ${cards.join("")}
+    </div>
+  `;
+  finalizeChartContentLayout(el);
+}
+
+function renderOverviewTrendWatchPanel(chartId, responseMap) {
+  const el = document.getElementById(chartId);
+  if (!el) return;
+  setChartContentMode(el);
+
+  const trendSpecs = [
+    {
+      indicatorId: "population_18_24",
+      title: "Population aged 18-24",
+      description: "Demand base across the selected comparison systems.",
+    },
+    {
+      indicatorId: "international_students_share",
+      title: "International tertiary students",
+      description: "Inbound international demand signal at system level.",
+    },
+    {
+      indicatorId: "tertiary_attainment_25_34",
+      title: "Tertiary attainment age 25-34",
+      description: "Young-adult attainment benchmark versus selected systems.",
+    },
+    {
+      indicatorId: "recent_graduate_employment_rate",
+      title: "Recent graduate employment rate",
+      description: "Early-career labour-market outcome signal.",
+    },
+  ];
+
+  el.innerHTML = `
+    <div class="overview-trend-grid">
+      ${trendSpecs
+        .map(
+          (spec) => `
+            <article class="overview-trend-card">
+              <div class="overview-trend-header">
+                <div>
+                  <h3>${escapeHtml(spec.title)}</h3>
+                  <p>${escapeHtml(spec.description)}</p>
+                </div>
+              </div>
+              <div id="${chartId}-${spec.indicatorId}" class="chart overview-mini-chart"></div>
+              <p class="chart-note" id="note-${chartId}-${spec.indicatorId}"></p>
+            </article>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+
+  trendSpecs.forEach((spec) => {
+    const rows = overviewResponseRows(responseMap, spec.indicatorId);
+    const response = responseMap?.[spec.indicatorId];
+    const innerChartId = `${chartId}-${spec.indicatorId}`;
+    const noteEl = document.getElementById(`note-${chartId}-${spec.indicatorId}`);
+
+    if (!rows.length || !response?.indicator) {
+      overviewMiniChartState(innerChartId, spec.title, "No data is available for the current filter set.");
+      if (noteEl) noteEl.textContent = "Adjust the time range or comparison systems to repopulate this trend.";
+      return;
+    }
+
+    renderTrendChart(innerChartId, rows, response.indicator);
+    if (noteEl) noteEl.textContent = makeTrendNarrative(rows, response.indicator);
+  });
+
+  finalizeChartContentLayout(el);
+}
+
+function renderOverviewInstitutionBriefPanel(chartId, primary, summary, projects, quality) {
+  const el = document.getElementById(chartId);
+  if (!el) return;
+  setChartContentMode(el);
+
+  const researchPoints = summary ? filterResearchPoints(summary.counts_by_year || []) : [];
+  const latestResearchPoint = researchPoints[researchPoints.length - 1] || null;
+  const researchBaseline = researchPoints[0] || null;
+  const publicationsDelta = latestResearchPoint && researchBaseline && latestResearchPoint.year !== researchBaseline.year
+    ? latestResearchPoint.works_count - researchBaseline.works_count
+    : null;
+
+  const projectCount = Number(projects?.metadata?.direct_match_project_count || projects?.projects?.length || 0);
+  const qaMetadata = quality?.deqar?.metadata || {};
+  const qaValidity = quality?.deqar?.status === "active"
+    ? qualityValidityCountdownLabel(qaMetadata)
+    : (quality?.deqar?.metadata?.next_step || quality?.deqar?.summary || "Quality context unavailable");
+
+  const researchFacts = summary
+    ? [
+        qualityFactCard(
+          "Publications",
+          latestResearchPoint ? formatValue(latestResearchPoint.works_count, "persons") : "n/a",
+          latestResearchPoint ? `${latestResearchPoint.year}${publicationsDelta === null ? "" : ` • ${formatDelta(publicationsDelta, "persons")} since ${researchBaseline.year}`}` : "No publication-year data in range",
+        ),
+        qualityFactCard(
+          "Total citations",
+          formatValue(summary.cited_by_count || 0, "persons"),
+          summary.summary_stats?.["2yr_mean_citedness"] != null ? `2-year mean citedness ${Number(summary.summary_stats["2yr_mean_citedness"]).toFixed(2)}` : "Mean citedness unavailable",
+        ),
+        qualityFactCard(
+          "h-index",
+          summary.summary_stats?.h_index != null ? formatValue(summary.summary_stats.h_index, "persons") : "n/a",
+          summary.summary_stats?.i10_index != null ? `${formatValue(summary.summary_stats.i10_index, "persons")} works with 10+ citations` : "i10-index unavailable",
+        ),
+        qualityFactCard(
+          "Open-access share",
+          latestResearchPoint?.open_access_share != null ? formatValue(latestResearchPoint.open_access_share, "percent") : "n/a",
+          latestResearchPoint ? `${latestResearchPoint.year} publication year` : "Open-access share unavailable",
+        ),
+      ].join("")
+    : [
+        qualityFactCard("Publications", "n/a", "OpenAlex summary unavailable"),
+        qualityFactCard("Total citations", "n/a", "OpenAlex summary unavailable"),
+        qualityFactCard("h-index", "n/a", "OpenAlex summary unavailable"),
+        qualityFactCard("Open-access share", "n/a", "OpenAlex summary unavailable"),
+      ].join("");
+
+  const projectFacts = [
+    qualityFactCard(
+      "Project status",
+      pageStatusLabel(projects?.status || "unavailable"),
+      projects?.status === "active" ? `${projectCount} direct institution matches in the latest CORDIS export` : (projects?.message || "CORDIS project status unavailable"),
+    ),
+    qualityFactCard(
+      "Direct matches",
+      projects?.status === "active" ? formatValue(projectCount, "persons") : "n/a",
+      projects?.status === "active" ? `Query ${projects.metadata?.query || "n/a"}` : (projects?.metadata?.query || "Awaiting a completed extraction"),
+    ),
+    qualityFactCard(
+      "Coordinator roles",
+      projects?.status === "active" ? formatValue(Number(projects.metadata?.coordinator_project_count || 0), "persons") : "n/a",
+      projects?.status === "active" ? `${formatValue(Number(projects.metadata?.partner_country_count || 0), "persons")} partner countries in the current export` : (projects?.metadata?.next_step || "No project extraction ready yet"),
+    ),
+    qualityFactCard(
+      "Latest project start",
+      projects?.status === "active" && projects?.metadata?.latest_start_year ? String(projects.metadata.latest_start_year) : "n/a",
+      projects?.status === "active" ? `${projects.metadata?.framework_counts ? `${Object.keys(projects.metadata.framework_counts).length} framework buckets` : "Framework mix unavailable"}` : "Projects remain credentialed and extraction-backed",
+    ),
+  ].join("");
+
+  const qualityFacts = [
+    qualityFactCard(
+      "QA sources",
+      qualitySourceTagLabel(quality),
+      quality?.neaa?.status === "active" ? "Bulgarian local overlay active" : "External QA context",
+    ),
+    qualityFactCard(
+      "Current decision",
+      qualityCurrentStatusValue(quality),
+      quality?.deqar?.decision_date ? `Anchor decision ${formatCalendarDate(quality.deqar.decision_date)}` : (quality?.neaa?.metadata?.decision_date_text || "Decision date unavailable"),
+    ),
+    qualityFactCard(
+      "Institutional validity",
+      qaValidity,
+      quality?.deqar?.status === "active" ? qualityInstitutionalValidityNote(qaMetadata) : (quality?.deqar?.metadata?.coverage_notice || ""),
+    ),
+    qualityFactCard(
+      "Reports indexed",
+      formatValue(Number(quality?.metadata?.report_count || 0), "persons"),
+      quality?.deqar?.status === "active" ? qualityCoverageMixLabel(qaMetadata) : (quality?.benchmarking?.message || "Benchmark readiness unavailable"),
+    ),
+  ].join("");
+
+  el.innerHTML = `
+    <div class="overview-institution-grid">
+      <article class="overview-section-card">
+        <div class="overview-section-header">
+          <div>
+            <p class="blocked-kicker">OpenAlex</p>
+            <h3>${escapeHtml(primary?.display_name || "Selected university")}</h3>
+          </div>
+          <div class="indicator-tag">Research visibility</div>
+        </div>
+        <div class="overview-section-facts">
+          ${researchFacts}
+        </div>
+        <p class="chart-note">
+          ${escapeHtml(summary ? "These indicators stay anchored to the first selected university and should be read as visibility signals, not a full research evaluation." : "Select or reload a university to restore the institution-level research summary.")}
+        </p>
+      </article>
+      <article class="overview-section-card">
+        <div class="overview-section-header">
+          <div>
+            <p class="blocked-kicker">CORDIS</p>
+            <h3>EU project activity</h3>
+          </div>
+          <div class="indicator-tag">${escapeHtml(pageStatusLabel(projects?.status || "unavailable"))}</div>
+        </div>
+        <div class="overview-section-facts">
+          ${projectFacts}
+        </div>
+        <p class="chart-note">${escapeHtml(projects?.message || "CORDIS project status unavailable.")}</p>
+      </article>
+      <article class="overview-section-card">
+        <div class="overview-section-header">
+          <div>
+            <p class="blocked-kicker">DEQAR / NEAA</p>
+            <h3>Quality context</h3>
+          </div>
+          <div class="indicator-tag">${escapeHtml(qualitySourceTagLabel(quality))}</div>
+        </div>
+        <div class="overview-section-facts">
+          ${qualityFacts}
+        </div>
+        <p class="chart-note">${escapeHtml(quality?.deqar?.summary || quality?.neaa?.message || "Quality context unavailable.")}</p>
+      </article>
+    </div>
+  `;
+  finalizeChartContentLayout(el);
+}
+
 function makeBreakdownNarrative(rows, indicator) {
   if (!rows.length) {
     return `No data available for ${indicator.title.toLowerCase()} in the selected range.`;
@@ -2840,6 +3244,137 @@ function renderQualityKpis(quality, primary) {
   kpiGrid.innerHTML = cards.join("");
 }
 
+function renderOverviewLayout(page) {
+  disposeCharts();
+  kpiGrid.hidden = false;
+  const primary = primaryInstitution();
+
+  const panelMarkup = page.panels
+    .map(
+      (panel) => `
+        <section class="panel ${panel.layout === "wide" ? "panel-wide" : ""}">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Overview</p>
+              <h2>${panel.title}</h2>
+              <p class="panel-summary">${panel.description || ""}</p>
+            </div>
+            <div class="indicator-tag" id="tag-${panel.id}">Loading...</div>
+          </div>
+          <div id="chart-${panel.id}" class="${isHtmlPanelType(panel.chart_type) ? "chart chart-content" : "chart"}"></div>
+          <p class="chart-note" id="note-${panel.id}"></p>
+        </section>
+      `,
+    )
+    .join("");
+
+  pageContent.innerHTML = `
+    <section class="context-banner panel panel-wide overview-banner">
+      <div class="panel-header">
+        <div>
+          <p class="panel-kicker">Executive synthesis</p>
+          <h2>Country-level demand and outcomes plus institution-level research, funding, and quality context</h2>
+        </div>
+        <div class="indicator-tag">${primary ? `${institutionSelectionSummary()} • primary institution` : "Select universities"}</div>
+      </div>
+      <div class="overview-banner-copy">
+        <p class="chart-note">
+          National indicators below describe Bulgaria and the selected comparison systems. Institution signals stay anchored to the first selected university and summarize the existing Research and Quality integrations without implying direct causality between the layers.
+        </p>
+        <p class="chart-note">
+          Absolute counts such as population, international students, and researchers are system-size context. Percentage indicators such as attainment, recent graduate employment, and R&amp;D intensity are the clearest benchmark comparisons.
+        </p>
+      </div>
+    </section>
+    ${panelMarkup}
+  `;
+}
+
+function renderOverviewKpis(dataMap, primary, summary, projects, quality) {
+  const pop = latestAndPrevious(dataMap.population_18_24 || []);
+  const attainmentLatest = latestByCountry(dataMap.tertiary_attainment_25_34 || []);
+  const graduateLatest = latestByCountry(dataMap.recent_graduate_employment_rate || []);
+  const international = latestAndPrevious(dataMap.international_students_share || []);
+  const researchPoints = summary ? filterResearchPoints(summary.counts_by_year || []) : [];
+  const latestResearchPoint = researchPoints[researchPoints.length - 1] || null;
+  const researchBaseline = researchPoints[0] || null;
+  const publicationsDelta = latestResearchPoint && researchBaseline && latestResearchPoint.year !== researchBaseline.year
+    ? latestResearchPoint.works_count - researchBaseline.works_count
+    : null;
+  const projectCount = Number(projects?.metadata?.direct_match_project_count || projects?.projects?.length || 0);
+
+  const cards = [
+    buildKpiCard(
+      "Population aged 18-24",
+      pop.latest ? formatValue(pop.latest.value, "persons") : "n/a",
+      pop.latest ? `Bulgaria · ${pop.latest.year}` : "Bulgaria",
+      dataMap.population_18_24?.length ? overviewDeltaSincePrevious(dataMap.population_18_24, "persons") : "Population context unavailable",
+      "neutral",
+    ),
+    buildKpiCard(
+      "Tertiary attainment 25-34",
+      attainmentLatest.BG ? formatValue(attainmentLatest.BG.value, "percent") : "n/a",
+      attainmentLatest.BG ? `Bulgaria · ${attainmentLatest.BG.year}` : "Bulgaria",
+      attainmentLatest.BG && attainmentLatest.EU27_2020
+        ? `${formatDelta(attainmentLatest.BG.value - attainmentLatest.EU27_2020.value, "percent")} vs EU`
+        : "EU comparison unavailable",
+      attainmentLatest.BG && attainmentLatest.EU27_2020 ? deltaClassFor(attainmentLatest.BG.value - attainmentLatest.EU27_2020.value) : "neutral",
+    ),
+    buildKpiCard(
+      "Recent graduate employment",
+      graduateLatest.BG ? formatValue(graduateLatest.BG.value, "percent") : "n/a",
+      graduateLatest.BG ? `Bulgaria · ${graduateLatest.BG.year}` : "Bulgaria",
+      graduateLatest.BG && graduateLatest.EU27_2020
+        ? `${formatDelta(graduateLatest.BG.value - graduateLatest.EU27_2020.value, "percent")} vs EU`
+        : "EU comparison unavailable",
+      graduateLatest.BG && graduateLatest.EU27_2020 ? deltaClassFor(graduateLatest.BG.value - graduateLatest.EU27_2020.value) : "neutral",
+    ),
+    buildKpiCard(
+      "International tertiary students",
+      international.latest ? formatValue(international.latest.value, "persons") : "n/a",
+      international.latest ? `Bulgaria · ${international.latest.year}` : "Bulgaria",
+      dataMap.international_students_share?.length ? overviewDeltaSincePrevious(dataMap.international_students_share, "persons") : "International-demand context unavailable",
+      "neutral",
+    ),
+    buildKpiCard(
+      "Publications",
+      latestResearchPoint ? formatValue(latestResearchPoint.works_count, "persons") : "n/a",
+      latestResearchPoint ? `${primary?.display_name || "Selected university"} · ${latestResearchPoint.year}` : (primary?.display_name || "Selected university"),
+      summary
+        ? (publicationsDelta === null ? "No earlier comparison" : `${formatDelta(publicationsDelta, "persons")} since ${researchBaseline.year}`)
+        : "OpenAlex summary unavailable",
+      summary ? deltaClassFor(publicationsDelta) : "neutral",
+    ),
+    buildKpiCard(
+      "h-index",
+      summary?.summary_stats?.h_index != null ? formatValue(summary.summary_stats.h_index, "persons") : "n/a",
+      primary?.display_name || "Selected university",
+      summary?.summary_stats?.i10_index != null ? `${formatValue(summary.summary_stats.i10_index, "persons")} works with 10+ citations` : "OpenAlex summary unavailable",
+      "neutral",
+    ),
+    buildKpiCard(
+      "EU projects",
+      projects?.status === "active" ? formatValue(projectCount, "persons") : pageStatusLabel(projects?.status || "unavailable"),
+      primary?.display_name || "Selected university",
+      projects?.status === "active"
+        ? `${formatValue(Number(projects.metadata?.coordinator_project_count || 0), "persons")} coordinator roles`
+        : (projects?.metadata?.next_step || projects?.message || "CORDIS status unavailable"),
+      "neutral",
+    ),
+    buildKpiCard(
+      "QA status",
+      qualityCurrentStatusValue(quality),
+      qualitySourceTagLabel(quality),
+      quality?.deqar?.decision_date
+        ? `Anchor decision ${formatCalendarDate(quality.deqar.decision_date)}`
+        : (quality?.deqar?.summary || quality?.neaa?.message || "Quality context unavailable"),
+      "neutral",
+    ),
+  ];
+
+  kpiGrid.innerHTML = cards.join("");
+}
+
 function renderPlaceholderPage(page) {
   disposeCharts();
   state.currentIndicator = null;
@@ -2860,6 +3395,119 @@ function renderPlaceholderPage(page) {
       </p>
     </section>
   `;
+}
+
+async function loadOverviewPage(page) {
+  const institutions = await ensureInstitutionSelection();
+  const primary = primaryInstitution();
+
+  renderOverviewLayout(page);
+  showKpiSkeletons();
+
+  page.panels.forEach((panel) => showSkeleton(`chart-${panel.id}`));
+  page.panels.forEach((panel) => {
+    const note = document.getElementById(`note-${panel.id}`);
+    if (note) note.textContent = "";
+  });
+
+  state.currentIndicator = null;
+  syncControls(page);
+
+  const indicatorIds = [...new Set(page.panels.flatMap((panel) => panel.indicator_ids || []))];
+  const [batchResult, summaryResult, projectsResult, qualityResult] = await Promise.allSettled([
+    fetchBatchData(indicatorIds, state.currentCountries, state.currentYearRange),
+    primary ? getResearchSummaryCached(primary.id) : Promise.resolve(null),
+    primary ? getProjectsStatusCached(primary.id) : Promise.resolve(null),
+    primary ? getQualityStatusCached(primary.id, state.qualityPeerMode) : Promise.resolve(null),
+  ]);
+
+  const batch = batchResult.status === "fulfilled"
+    ? batchResult.value
+    : { results: {}, errors: {} };
+  const responseMap = batch.results || {};
+  const dataMap = Object.fromEntries(indicatorIds.map((indicatorId) => [indicatorId, responseMap[indicatorId]?.rows || []]));
+  const summary = summaryResult.status === "fulfilled" ? summaryResult.value : null;
+  const projects = projectsResult.status === "fulfilled" && projectsResult.value
+    ? projectsResult.value
+    : {
+        source: "cordis",
+        status: "unavailable",
+        message: "CORDIS project status could not be loaded right now.",
+        metadata: {},
+        projects: [],
+      };
+  const quality = qualityResult.status === "fulfilled" && qualityResult.value
+    ? qualityResult.value
+    : {
+        institution_id: primary?.id || "",
+        deqar: {
+          source: "deqar",
+          institution_id: primary?.id || "",
+          status: "unavailable",
+          current_status: null,
+          agency: null,
+          decision_date: null,
+          summary: "Quality context could not be loaded right now.",
+          reports: [],
+          metadata: {},
+        },
+        neaa: {
+          source: "neaa",
+          status: "unavailable",
+          message: "NEAA context could not be loaded right now.",
+          institution_id: primary?.id || "",
+          metadata: {},
+        },
+        benchmarking: {
+          source: "benchmarking",
+          status: "unavailable",
+          message: "Benchmarking readiness could not be loaded right now.",
+          institution_id: primary?.id || "",
+          metadata: {},
+        },
+        metadata: {},
+      };
+
+  renderOverviewKpis(dataMap, primary, summary, projects, quality);
+
+  page.panels.forEach((panel) => {
+    const chartId = `chart-${panel.id}`;
+    const tagEl = document.getElementById(`tag-${panel.id}`);
+    const noteEl = document.getElementById(`note-${panel.id}`);
+
+    if (panel.chart_type === "overview_national_snapshot") {
+      const latestYearLabel = overviewLatestIndicatorYear(responseMap, panel.indicator_ids) ?? "n/a";
+      if (tagEl) tagEl.textContent = `Eurostat • ${latestYearLabel}`;
+      renderOverviewNationalSnapshotPanel(chartId, responseMap);
+      if (noteEl) {
+        noteEl.textContent = "Absolute counts are system-size context. Percentage indicators use Bulgaria versus the EU benchmark when available, while the selected-country range provides added scale context.";
+      }
+      return;
+    }
+
+    if (panel.chart_type === "overview_trend_watch") {
+      if (tagEl) tagEl.textContent = `${state.currentYearRange.from}–${state.currentYearRange.to} • selected systems`;
+      renderOverviewTrendWatchPanel(chartId, responseMap);
+      if (noteEl) {
+        noteEl.textContent = "These four trends condense the existing Market and Outcomes pages into a single executive watchlist for the current filter set.";
+      }
+      return;
+    }
+
+    if (panel.chart_type === "overview_institution_brief") {
+      if (tagEl) {
+        tagEl.textContent = primary ? `${primary.display_name} • mixed sources` : "Institution context";
+      }
+      renderOverviewInstitutionBriefPanel(chartId, primary, summary, projects, quality);
+      if (noteEl) {
+        noteEl.textContent = primary
+          ? "Institution signals below stay anchored to the first selected university; use the dedicated Research and Quality pages for deeper drill-down."
+          : "Select a university to populate the institution-specific part of the Overview page.";
+      }
+    }
+  });
+
+  syncControls(page);
 }
 
 async function loadMarketPage(page) {
@@ -3647,6 +4295,11 @@ async function renderCurrentRoute() {
   renderPageHeader(activePage);
   renderNav();
   syncControls(activePage);
+
+  if (activePage.id === "overview" && activePage.status === "active") {
+    await loadOverviewPage(activePage);
+    return;
+  }
 
   if (activePage.id === "market" && activePage.status === "active") {
     await loadMarketPage(activePage);

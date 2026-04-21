@@ -3,10 +3,35 @@ pages:
     slug: overview
     title: Overview
     description: Executive synthesis across demand, outcomes, research visibility, and quality context.
-    status: planned
+    status: active
     context_type: mixed_context
-    controls: [countries, year_range, institution, export]
-    panels: []
+    controls: [countries, year_range, institution]
+    panels:
+      - id: overview_national_snapshot
+        title: National benchmark snapshot
+        description: Executive view of Bulgaria's current demand, outcome, and research-environment context using the selected comparison systems.
+        indicator_ids:
+          [
+            population_18_24,
+            tertiary_attainment_25_34,
+            recent_graduate_employment_rate,
+            international_students_share,
+            researchers_fte,
+            rd_expenditure_gdp,
+          ]
+        chart_type: overview_national_snapshot
+        layout: wide
+      - id: overview_trend_watch
+        title: Demand and outcomes trend watch
+        description: Condensed trend view for the core demand and graduate-outcome signals already used across Market and Outcomes.
+        indicator_ids: [population_18_24, tertiary_attainment_25_34, recent_graduate_employment_rate, international_students_share]
+        chart_type: overview_trend_watch
+        layout: wide
+      - id: overview_institution_brief
+        title: Institution research, funding, and quality brief
+        description: Primary-university synthesis across OpenAlex visibility, CORDIS project readiness, and DEQAR or NEAA quality context.
+        chart_type: overview_institution_brief
+        layout: wide
   - id: market
     slug: market
     title: Market and Demand
