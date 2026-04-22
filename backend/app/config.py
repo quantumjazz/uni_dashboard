@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,9 +30,15 @@ class Settings(BaseSettings):
     database_url: str = f"sqlite:///{ROOT_DIR / 'data' / 'cache' / 'dashboard.db'}"
     cache_ttl_hours: int = 24
     cordis_base_url: str = "https://cordis.europa.eu/api/dataextractions"
-    cordis_api_key: str | None = None
+    cordis_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("CORDIS_API_KEY", "CORDIS_KEY"),
+    )
     deqar_base_url: str = "https://backend.deqar.eu/webapi/v2"
-    deqar_api_key: str | None = None
+    deqar_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DEQAR_API_KEY", "DEQAR_KEY"),
+    )
     deqar_reports_csv_path: Path = ROOT_DIR / "data" / "deqar" / "deqar-reports.csv"
     deqar_institutions_csv_path: Path = ROOT_DIR / "data" / "deqar" / "deqar-institutions.csv"
     deqar_agencies_csv_path: Path = ROOT_DIR / "data" / "deqar" / "deqar-agencies.csv"

@@ -267,6 +267,15 @@ class ResearchService:
         extraction: dict[str, object],
         json_export: dict[str, list[dict[str, object]]],
     ) -> CordisProjectsResponse:
+        has_legacy_project_tables = bool(json_export.get("project")) and bool(json_export.get("organization"))
+        if has_legacy_project_tables:
+            return self._build_projects_response_from_legacy(
+                institution=institution,
+                query=query,
+                extraction=extraction,
+                json_export=json_export,
+            )
+
         if json_export.get("_records"):
             return self._build_projects_response_from_records(
                 institution=institution,
